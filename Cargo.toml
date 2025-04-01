@@ -1,0 +1,10 @@
+[package]
+name = "os"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# 设置编译选项
+# os/.cargo/config
+[build]
+target = "riscv64gc-unknown-none-elf"
