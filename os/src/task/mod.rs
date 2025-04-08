@@ -17,6 +17,7 @@ mod task;
 use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
+use alloc::vec::Vec;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
@@ -36,15 +37,17 @@ pub struct TaskManager {
     /// total number of tasks
     num_app: usize,
     /// use inner value to get mutable access
-    inner: UPSafeCell<TaskManagerInner>,
+    pub  inner: UPSafeCell<TaskManagerInner>,
 }
-
+// Arc::new(RefCell::new(BTreeMap::new()));
 /// Inner of Task Manager
 pub struct TaskManagerInner {
     /// task list
     tasks: [TaskControlBlock; MAX_APP_NUM],
     /// id of current `Running` task
     current_task: usize,
+    ///保存调用信息
+    pub map: Vec<Vec<(isize,isize)>>
 }
 
 lazy_static! {
@@ -59,12 +62,17 @@ lazy_static! {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
         }
+        let mut map=Vec::new();
+        for _ in 0..num_app{
+            map.push(Vec::new());
+        }
         TaskManager {
             num_app,
             inner: unsafe {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
+                    map
                 })
             },
         }
@@ -89,7 +97,26 @@ impl TaskManager {
         }
         panic!("unreachable in run_first_task!");
     }
+   fn push_task_trace(&self,id:isize){
+    let mut inner = self.inner.exclusive_access();
+    let current = inner.current_task;
+    if let Some(v)=inner.map[current].iter_mut().find(|k|k.0==id){
+      v.1+=1;
+    }else{
+        inner.map[current].push((id,1));
+    }   
+   }
+   fn get_task_trace(&self,id:isize)->isize{
+    let inner = self.inner.exclusive_access();
+    let current = inner.current_task;
+    let trace=inner.map[current].clone();
+    if let Some(v)=trace.into_iter().find(|k|k.0==id){
+        v.1
+    }else{
+       0
+    }
 
+   }
     /// Change the status of current `Running` task into `Ready`.
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.exclusive_access();
@@ -168,4 +195,12 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+///获取id在当前task的计数
+pub fn get_task_trace(id:usize)->isize{
+    TASK_MANAGER.get_task_trace(id.try_into().unwrap()) 
+}
+/// 添加id在当前task的计数
+pub fn push_task_trace(id:usize){
+    TASK_MANAGER.push_task_trace(id.try_into().unwrap())
 }

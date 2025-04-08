@@ -1,9 +1,5 @@
-//! Process management syscalls
-use alloc::collections::btree_map::BTreeMap;
-use spin::MutexGuard;
-
 use crate::{
-    task::{exit_current_and_run_next, suspend_current_and_run_next},
+    task::{exit_current_and_run_next, get_task_trace, suspend_current_and_run_next},
     timer::get_time_us,
 };
 #[repr(C)]
@@ -45,7 +41,6 @@ pub fn sys_trace(
     _trace_request: usize,
     _id: usize,
     _data: usize,
-    map: MutexGuard<'_, BTreeMap<usize, usize>>,
 ) -> isize {
     match _trace_request {
         0 => unsafe { *(_id as *const u8) as isize },
@@ -55,7 +50,7 @@ pub fn sys_trace(
             }
             0
         }
-        2 => *map.get(&_id).unwrap() as isize,
+        2 =>get_task_trace(_id) ,
         _ => -1,
     }
 }
