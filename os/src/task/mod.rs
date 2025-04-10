@@ -173,6 +173,7 @@ impl TaskManager {
     let current = inner.current_task;
     let trace=inner.map[current].clone();
     if let Some(v)=trace.into_iter().find(|k|k.0==id){
+        println!("值:{:?}",v.1);
         v.1
     }else{
        0
@@ -227,6 +228,7 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
 }
+/// 获取id在当前task的计数
 pub fn get_task_trace(id:usize)->isize{
     TASK_MANAGER.get_task_trace(id.try_into().unwrap()) 
 }

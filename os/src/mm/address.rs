@@ -113,6 +113,10 @@ impl VirtAddr {
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
     }
+    /// 获取页的起始地址
+    pub fn page_start(&self) -> usize {
+        self.0<<12
+    }
 }
 impl From<VirtAddr> for VirtPageNum {
     fn from(v: VirtAddr) -> Self {
