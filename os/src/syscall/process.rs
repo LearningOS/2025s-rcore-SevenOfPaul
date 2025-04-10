@@ -32,9 +32,22 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 
 /// TODO: Finish sys_trace to pass testcases
 /// HINT: You might reimplement it with virtual memory management.
-pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
-    trace!("kernel: sys_trace");
-    -1
+pub fn sys_trace(
+    _trace_request: usize,
+    _id: usize,
+    _data: usize,
+) -> isize {
+    match _trace_request {
+        0 => unsafe { *(_id as *const u8) as isize },
+        1 => {
+            unsafe {
+                *(_id as *mut u8) = _data as u8;
+            }
+            0
+        }
+        2 =>get_task_trace(_id) ,
+        _ => -1,
+    }
 }
 
 // YOUR JOB: Implement mmap.
