@@ -26,6 +26,7 @@ pub fn sys_yield() -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
+    //这里也一样
     trace!("kernel: sys_get_time");
     -1
 }
@@ -38,6 +39,7 @@ pub fn sys_trace(
     _data: usize,
 ) -> isize {
     match _trace_request {
+        //这里需要把用户的虚拟地址改为物理地址
         0 => unsafe { *(_id as *const u8) as isize },
         1 => {
             unsafe {
