@@ -46,6 +46,7 @@ struct TaskManagerInner {
     tasks: Vec<TaskControlBlock>,
     /// id of current `Running` task
     current_task: usize,
+    pub map: Vec<Vec<(isize,isize)>>
 }
 
 lazy_static! {
@@ -58,12 +59,17 @@ lazy_static! {
         for i in 0..num_app {
             tasks.push(TaskControlBlock::new(get_app_data(i), i));
         }
+        let mut map=Vec::new();
+        for _ in 0..num_app{
+            map.push(Vec::new());
+        }
         TaskManager {
             num_app,
             inner: unsafe {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
+                    map,
                 })
             },
         }
@@ -153,6 +159,25 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+    fn push_task_trace(&self,id:isize){
+    let mut inner = self.inner.exclusive_access();
+    let current = inner.current_task;
+    if let Some(v)=inner.map[current].iter_mut().find(|k|k.0==id){
+      v.1+=1;
+    }else{
+        inner.map[current].push((id,1));
+    }   
+   }
+   fn get_task_trace(&self,id:isize)->isize{
+    let inner = self.inner.exclusive_access();
+    let current = inner.current_task;
+    let trace=inner.map[current].clone();
+    if let Some(v)=trace.into_iter().find(|k|k.0==id){
+        v.1
+    }else{
+       0
+    }
+   }
 }
 
 /// Run the first task in task list.
@@ -201,4 +226,11 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+pub fn get_task_trace(id:usize)->isize{
+    TASK_MANAGER.get_task_trace(id.try_into().unwrap()) 
+}
+/// 添加id在当前task的计数
+pub fn push_task_trace(id:usize){
+    TASK_MANAGER.push_task_trace(id.try_into().unwrap())
 }
