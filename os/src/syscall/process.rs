@@ -28,8 +28,9 @@ pub fn sys_yield() -> isize {
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     //这里也一样
     let us = get_time_us();
-    //这里也需要进行地址转换
     unsafe {
+        //这里也需要进行地址转换
+        let ppn = translate(_ts).unwrap().ppn;
         *ts = TimeVal {
             sec: us / 1_000_000,
             usec: us % 1_000_000,
@@ -40,22 +41,19 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 
 /// TODO: Finish sys_trace to pass testcases
 /// HINT: You might reimplement it with virtual memory management.
-pub fn sys_trace(
-    _trace_request: usize,
-    _id: usize,
-    _data: usize,
-) -> isize {
-    match _trace_request {
-        //这里需要把用户的虚拟地址改为物理地址
-        0 => unsafe { *(_id as *const u8) as isize },
-        1 => {
-            unsafe {
+pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
+    unsafe {
+        let ppn = translate(_ts).unwrap().ppn;
+        match _trace_request {
+            //这里需要把用户的虚拟地址改为物理地址
+            0 => *(_id as *const u8) as isize,
+            1 => {
                 *(_id as *mut u8) = _data as u8;
+                0
             }
-            0
+            2 => get_task_trace(ppn),
+            _ => -1,
         }
-        2 =>get_task_trace(_id) ,
-        _ => -1,
     }
 }
 
