@@ -126,6 +126,7 @@ impl From<VirtPageNum> for VirtAddr {
     }
 }
 impl PhysAddr {
+    //获取页号
     /// Get the (floor) physical page number
     pub fn floor(&self) -> PhysPageNum {
         PhysPageNum(self.0 / PAGE_SIZE)
