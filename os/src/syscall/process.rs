@@ -104,6 +104,7 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
                 }   
             }
             2 => {
+                // 对于系统调用跟踪，应该直接传递系统调用ID而不是物理地址
                 get_task_trace(_id)
             },
             _ => -1,
@@ -112,13 +113,21 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
 }
 
 // YOUR JOB: Implement mmap.
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
+    if start%PAGE_SIZE!=0||port&!0x7 != 0||prot & 0x7 = 0{
+ -1
+    }else{
+           let pages = (len + PAGE_SIZE-1)/PAGE_SIZE;
+        let page_table=PageTable::from(current_user_token());
+        let ppn=
+        page_table.map(VirtPageNum(start), ppn, flags);
+        0
+    }
+   
 }
 
 // YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
+pub fn sys_munmap(start: usize, len: usize) -> isize {
     trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
     -1
 }

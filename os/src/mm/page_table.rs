@@ -32,6 +32,7 @@ bitflags! {
 /// page table entry structure
 pub struct PageTableEntry {
     /// bits of page table entry
+    /// ppn存储在 10-53 flg存储在0-7
     pub bits: usize,
 }
 
