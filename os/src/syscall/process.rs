@@ -128,9 +128,10 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
         for i in 0..pages_len{
             //start是物理地址 除以size就是页号 检测是否有以及被映射的页号
             let vpn = VirtPageNum((start/PAGE_SIZE) + i);
-            if let Some(_)=page_table.translate(vpn){
-                println!("vpn={:?}",vpn);
-                return -1;
+            if let Some(pte)=page_table.translate(vpn){
+                if pte.is_valid(){
+                    return -1;
+                }
             }
         }
         // let ppn=alloc_pages(pages);
@@ -152,7 +153,7 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
             let ppn=frame.ppn;
             page_table.map(vpn, ppn, flags);
           }else{
-            return -1
+            return -1;
           }
          }
         0
@@ -161,9 +162,6 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(start: usize, len: usize) -> isize {
-    // if (start % PAGE_SIZE != 0)||(len==0) {
-    //    return -1;
-    // }
     let mut page_table = PageTable::from_token(current_user_token());
     let pages_len = (len + PAGE_SIZE - 1) / PAGE_SIZE;
     for i in 0..pages_len {
@@ -171,7 +169,6 @@ pub fn sys_munmap(start: usize, len: usize) -> isize {
         // 检查页面是否已映射且有效
         if let Some(pte) = page_table.translate(vpn) {
             if !pte.is_valid() {
-                return -1;
             }
             page_table.unmap(vpn);
         } else {
