@@ -153,7 +153,7 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
             let ppn=frame.ppn;
             page_table.map(vpn, ppn, flags);
           }else{
-            return -1;
+            return -1
           }
          }
         0
@@ -162,6 +162,9 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(start: usize, len: usize) -> isize {
+    if len == 0 {
+        return 0;
+    }
     let mut page_table = PageTable::from_token(current_user_token());
     let pages_len = (len + PAGE_SIZE - 1) / PAGE_SIZE;
     for i in 0..pages_len {
@@ -169,6 +172,8 @@ pub fn sys_munmap(start: usize, len: usize) -> isize {
         // 检查页面是否已映射且有效
         if let Some(pte) = page_table.translate(vpn) {
             if !pte.is_valid() {
+                println!("{:?}=vpn={:?}==page{:?}",!pte.is_valid(),vpn,i);
+                return -1;
             }
             page_table.unmap(vpn);
         } else {
