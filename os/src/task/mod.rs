@@ -173,7 +173,6 @@ impl TaskManager {
     let current = inner.current_task;
     let trace=inner.map[current].clone();
     if let Some(v)=trace.into_iter().find(|k|k.0==id){
-        println!("值:{:?}",v.1);
         v.1
     }else{
        0

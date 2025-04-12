@@ -1,7 +1,7 @@
 //! Process management syscalls
 use crate::{
     config::PAGE_SIZE,
-    mm::{PTEFlags, PageTable, VirtAddr, VirtPageNum},
+    mm::{frame_alloc, PTEFlags, PageTable, VirtAddr, VirtPageNum},
     task::{
         change_program_brk, current_user_token, exit_current_and_run_next, get_task_trace,
         suspend_current_and_run_next,
@@ -90,7 +90,7 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
         match _trace_request {
             //这里需要把用户的虚拟地址改为物理地址
             0 => {
-                if pte.is_valid() && pte.readable() {
+                if pte.is_valid() && pte.readable()&&pte.is_user() {
                     *(ppa as *const u8) as isize
                 } else {
                     -1
@@ -117,11 +117,22 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
 
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
+    // if len==0{
+    //     return 0;
+    // }
     if (start % PAGE_SIZE != 0) || (port & !0x7 != 0) || (port & 0x7 == 0) {
-        -1
+      -1
     } else {
-        let pages = (len + PAGE_SIZE - 1) / PAGE_SIZE;
-        let page_table = PageTable::from_token(current_user_token());
+        let pages_len = (len + PAGE_SIZE - 1) / PAGE_SIZE;
+        let mut page_table = PageTable::from_token(current_user_token());
+        for i in 0..pages_len{
+            //start是物理地址 除以size就是页号 检测是否有以及被映射的页号
+            let vpn = VirtPageNum((start/PAGE_SIZE) + i);
+            if let Some(_)=page_table.translate(vpn){
+                println!("vpn={:?}",vpn);
+                return -1;
+            }
+        }
         // let ppn=alloc_pages(pages);
         let (readable,wraiteable,excuteable)=(port & 0x1,port & 0x2,port & 0x4);
         let mut flags = PTEFlags::V | PTEFlags::U;
@@ -135,16 +146,39 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
             flags |= PTEFlags::X;
       }
       //准备计算ppn
-         let ppn=0;
-        page_table.map(VirtPageNum(start), ppn, flags);
+         for i in 0..pages_len{
+          if let Some(frame)=frame_alloc(){ 
+           let vpn=VirtPageNum((start/PAGE_SIZE) + i);
+            let ppn=frame.ppn;
+            page_table.map(vpn, ppn, flags);
+          }else{
+            return -1
+          }
+         }
         0
     }
 }
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(start: usize, len: usize) -> isize {
-    trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    -1
+    // if (start % PAGE_SIZE != 0)||(len==0) {
+    //    return -1;
+    // }
+    let mut page_table = PageTable::from_token(current_user_token());
+    let pages_len = (len + PAGE_SIZE - 1) / PAGE_SIZE;
+    for i in 0..pages_len {
+        let vpn = VirtPageNum((start/PAGE_SIZE) + i);
+        // 检查页面是否已映射且有效
+        if let Some(pte) = page_table.translate(vpn) {
+            if !pte.is_valid() {
+                return -1;
+            }
+            page_table.unmap(vpn);
+        } else {
+            return -1;
+        }
+    }
+    return 0;  
 }
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {
