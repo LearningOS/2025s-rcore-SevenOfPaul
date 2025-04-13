@@ -13,7 +13,8 @@ mod context;
 mod switch;
 #[allow(clippy::module_inception)]
 mod task;
-
+use crate::mm::VirtAddr;
+use crate::mm::PTEFlags;
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
@@ -43,9 +44,9 @@ pub struct TaskManager {
 /// The task manager inner in 'UPSafeCell'
 pub struct TaskManagerInner {
     /// task list
-    pub  tasks: Vec<TaskControlBlock>,
+      tasks: Vec<TaskControlBlock>,
     /// id of current `Running` task
-    pub  current_task: usize,
+      current_task: usize,
       /// task time
     pub map: Vec<Vec<(isize,isize)>>
 }
@@ -236,4 +237,48 @@ pub fn get_task_trace(id:usize)->isize{
 pub fn push_task_trace(id:usize){
     TASK_MANAGER.push_task_trace(id.try_into().unwrap())
 }
-// 在适当位置添加这个函数
+/// 在适当位置添加这个函数 mmap 分配
+pub fn task_mmap(start: usize, len: usize, port: usize) -> isize{
+    if len == 0 {
+        return 0;
+    }
+    let va_start: VirtAddr = start.into();
+    if(!va_start.aligned())||(port & !0x7 != 0) || (port & 0x7 == 0) {
+        return -1;
+    }
+    let va_end: VirtAddr = (start + len).into();
+    let (readable,wraiteable,excuteable)=(port & 0x1,port & 0x2,port & 0x4);
+            let mut flags = PTEFlags::V | PTEFlags::U;
+            if readable!=0{
+                flags |= PTEFlags::R;
+            }
+          if wraiteable !=0{
+                flags |= PTEFlags::W;
+            }
+          if excuteable!=0{
+                flags |= PTEFlags::X;
+          }
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+  
+    // 获取当前任务的内存集
+    let  memory_set =  &mut inner.tasks[current].memory_set;
+    
+    // 调用内存集的 mmap 方法
+    memory_set.mmap(va_start.into(), va_end.ceil(), flags)
+}
+///mmap 解散
+pub fn task_munmap(start: usize, len: usize) -> isize {
+    let va_start: VirtAddr = start.into();
+    if !va_start.aligned(){
+        return -1
+    }
+    // 获取当前任务的内存集
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    let  memory_set =  &mut inner.tasks[current].memory_set;
+    
+    // 调用内存集的 unmmap 方法
+    let va_end: VirtAddr = (start + len).into();
+    memory_set.unmmap(va_start.into(),va_end.ceil())
+}

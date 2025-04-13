@@ -2,7 +2,7 @@
 use crate::{
     config::PAGE_SIZE,
     mm::{PageTable, VirtAddr, VirtPageNum},
-    task::{TASK_MANAGER,
+    task::{task_mmap,task_munmap,
         change_program_brk, current_user_token, exit_current_and_run_next, get_task_trace,
         suspend_current_and_run_next,
     },
@@ -73,39 +73,14 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     0
 }
 pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
-    if len == 0 {
-        return 0;
-    }
-    if (start % PAGE_SIZE != 0) || (port & !0x7 != 0) || (port & 0x7 == 0) {
-        return -1;
-    }
-    //这种实现过于松散 下午整合一下
-    let mut inner = TASK_MANAGER.inner.exclusive_access();
-    let current = inner.current_task;
-  
-    // 获取当前任务的内存集
-    let  memory_set =  &mut inner.tasks[current].memory_set;
+
+    task_mmap(start, len, port)
     
-    // 调用内存集的 mmap 方法
-    memory_set.mmap(start, len, port)
 }
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(start: usize, len: usize) -> isize {
-    if len == 0 {
-        return 0;
-    }
-    if start % PAGE_SIZE != 0 {
-        return -1;
-    }
-    
-    // 获取当前任务的内存集
-    let mut inner = TASK_MANAGER.inner.exclusive_access();
-    let current = inner.current_task;
-    let  memory_set =  &mut inner.tasks[current].memory_set;
-    
-    // 调用内存集的 unmmap 方法
-    memory_set.unmmap(start, len)
+    task_munmap(start, len)
 }
 
 /// TODO: Finish sys_trace to pass testcases

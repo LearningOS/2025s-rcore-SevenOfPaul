@@ -7,6 +7,7 @@ use crate::mm::{
 use crate::trap::{trap_handler, TrapContext};
 
 /// The task control block (TCB) of a task.
+/// 这个是任务控制核心
 pub struct TaskControlBlock {
     /// Save task context
     pub task_cx: TaskContext,
