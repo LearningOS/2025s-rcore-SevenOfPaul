@@ -79,6 +79,7 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     if (start % PAGE_SIZE != 0) || (port & !0x7 != 0) || (port & 0x7 == 0) {
         return -1;
     }
+    //这种实现过于松散 下午整合一下
     let mut inner = TASK_MANAGER.inner.exclusive_access();
     let current = inner.current_task;
   
