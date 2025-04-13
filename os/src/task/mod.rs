@@ -37,15 +37,16 @@ pub struct TaskManager {
     /// total number of tasks
     num_app: usize,
     /// use inner value to get mutable access
-    inner: UPSafeCell<TaskManagerInner>,
+    pub inner: UPSafeCell<TaskManagerInner>,
 }
 
 /// The task manager inner in 'UPSafeCell'
-struct TaskManagerInner {
+pub struct TaskManagerInner {
     /// task list
-    tasks: Vec<TaskControlBlock>,
+    pub  tasks: Vec<TaskControlBlock>,
     /// id of current `Running` task
-    current_task: usize,
+    pub  current_task: usize,
+      /// task time
     pub map: Vec<Vec<(isize,isize)>>
 }
 
@@ -235,3 +236,4 @@ pub fn get_task_trace(id:usize)->isize{
 pub fn push_task_trace(id:usize){
     TASK_MANAGER.push_task_trace(id.try_into().unwrap())
 }
+// 在适当位置添加这个函数
