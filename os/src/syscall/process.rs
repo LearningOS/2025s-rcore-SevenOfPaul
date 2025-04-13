@@ -1,7 +1,7 @@
 //! Process management syscalls
 use crate::{
     config::PAGE_SIZE,
-    mm::{frame_alloc, PTEFlags, PageTable, VirtAddr, VirtPageNum},
+    mm::{frame_alloc,PTEFlags,PageTable, VirtAddr, VirtPageNum},
     task::{
         change_program_brk, current_user_token, exit_current_and_run_next, get_task_trace,
         suspend_current_and_run_next,
@@ -115,6 +115,14 @@ pub fn sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
     }
 }
 }
+// pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
+//    let mut kr= KERNEL_SPACE.exclusive_access();
+//    kr.mmap(start, len, port)
+// }
+// pub fn sys_munmap(start: usize, len: usize) -> isize {
+//     let mut kr= KERNEL_SPACE.exclusive_access();
+//     kr.unmmap(start, len)
+// }
 // YOUR JOB: Implement mmap.
 pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     // if len==0{
@@ -152,8 +160,15 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
            let vpn=VirtPageNum((start/PAGE_SIZE) + i);
             let ppn=frame.ppn;
             page_table.map(vpn, ppn, flags);
-          }else{
-            return -1
+            println!("{:?}=={:?}",page_table.translate(vpn).unwrap().is_valid(),vpn);
+          }
+          else{
+            //清理之前
+            // for j in 0..i{
+            //     let vpn=VirtPageNum((start/PAGE_SIZE) + j);
+            //     page_table.unmap(vpn);
+            // }
+            // return -1
           }
          }
         0
@@ -171,7 +186,8 @@ pub fn sys_munmap(start: usize, len: usize) -> isize {
         let vpn = VirtPageNum((start/PAGE_SIZE) + i);
         // 检查页面是否已映射且有效
         if let Some(pte) = page_table.translate(vpn) {
-            if !pte.is_valid() {
+            if !pte.is_valid()||!pte.is_user() {
+                debug!("unmap fail don't aligned");
                 println!("{:?}=vpn={:?}==page{:?}",!pte.is_valid(),vpn,i);
                 return -1;
             }
