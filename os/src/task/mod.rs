@@ -282,6 +282,6 @@ pub fn task_munmap(start: usize, len: usize) -> isize {
     let  memory_set =  &mut inner.tasks[current].memory_set;
     
     // 调用内存集的 unmmap 方法
-    let va_end: VirtAddr = VirtAddr::from((start + len));
+    let va_end: VirtAddr = VirtAddr::from(start + len);
     memory_set.unmmap(va_start.floor(),va_end.ceil())
 }
