@@ -242,11 +242,13 @@ pub fn task_mmap(start: usize, len: usize, port: usize) -> isize{
     if len == 0 {
         return 0;
     }
-    let va_start: VirtAddr = start.into();
+    //把start 转成虚拟地址
+    let va_start: VirtAddr =VirtAddr::from(start);
     if(!va_start.aligned())||(port & !0x7 != 0) || (port & 0x7 == 0) {
         return -1;
     }
-    let va_end: VirtAddr = (start + len).into();
+    //结尾的虚拟地址
+    let va_end: VirtAddr = VirtAddr::from(start + len);
     let (readable,wraiteable,excuteable)=(port & 0x1,port & 0x2,port & 0x4);
             let mut flags = PTEFlags::V | PTEFlags::U;
             if readable!=0{
@@ -265,11 +267,12 @@ pub fn task_mmap(start: usize, len: usize, port: usize) -> isize{
     let  memory_set =  &mut inner.tasks[current].memory_set;
     
     // 调用内存集的 mmap 方法
-    memory_set.mmap(va_start.into(), va_end.ceil(), flags)
+    //虚拟地址转页号
+    memory_set.mmap(va_start.floor(), va_end.ceil(), flags)
 }
 ///mmap 解散
 pub fn task_munmap(start: usize, len: usize) -> isize {
-    let va_start: VirtAddr = start.into();
+    let va_start: VirtAddr = VirtAddr::from(start);
     if !va_start.aligned(){
         return -1
     }
@@ -279,6 +282,6 @@ pub fn task_munmap(start: usize, len: usize) -> isize {
     let  memory_set =  &mut inner.tasks[current].memory_set;
     
     // 调用内存集的 unmmap 方法
-    let va_end: VirtAddr = (start + len).into();
-    memory_set.unmmap(va_start.into(),va_end.ceil())
+    let va_end: VirtAddr = VirtAddr::from((start + len));
+    memory_set.unmmap(va_start.floor(),va_end.ceil())
 }

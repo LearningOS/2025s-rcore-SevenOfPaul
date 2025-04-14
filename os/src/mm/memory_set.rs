@@ -276,7 +276,9 @@ impl MemorySet {
             }
             //分配物理页帧
             if let Some(ppn) = frame_alloc() {
+                //给va_start分配ppn 并设置映射权限
                 self.page_table.map(va_start, ppn.ppn, flags);
+                // 插入到map_tree中
                 self.mmap_tree.insert(va_start, ppn);
             } else {
                 return -1;
@@ -295,7 +297,9 @@ impl MemorySet {
             } else {
                 return -1;
             }
+            //取消映射
             self.page_table.unmap(va_start);
+            //删除表中的映射关系
             self.mmap_tree.remove(&va_start);
             va_start.step();
         }
