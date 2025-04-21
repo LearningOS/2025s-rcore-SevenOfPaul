@@ -2,14 +2,14 @@
 use alloc::sync::Arc;
 
 use crate::{
-    loader::get_app_data_by_name,
-    mm::{translated_refmut, translated_str},
-    task::{
-        add_task, current_task, current_user_token, exit_current_and_run_next,
+    config::PAGE_SIZE,
+    mm::{PageTable, VirtAddr, VirtPageNum},
+    task::{task_mmap,task_munmap,
+        change_program_brk, current_user_token, exit_current_and_run_next, get_task_trace,
         suspend_current_and_run_next,
     },
+    timer::get_time_us,
 };
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
@@ -105,32 +105,94 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 /// YOUR JOB: get time with second and microsecond
 /// HINT: You might reimplement it with virtual memory management.
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
-pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
+    let us = get_time_us();
+    let time = TimeVal {
+        sec: us / 1_000_000,
+        usec: us % 1_000_000,
+    };
+    //这里也一样
+    let page_table = PageTable::from_token(current_user_token());
+
+    // 获取虚拟地址
+    let va = VirtAddr::from(ts as usize);
+    let vpn = va.floor();
+    let offset = va.page_offset();
+    let pte = page_table.translate(vpn).unwrap();
+    let size_of_timeval = core::mem::size_of::<TimeVal>();
+    let ppn = pte.ppn();
+    let ppa = (ppn.0 << 12) + offset;
+    //如果size_of_timeval大于4096，那么就需要两个页来存储
+    if offset + size_of_timeval <= PAGE_SIZE {
+        unsafe { *(ppa as *mut TimeVal) = time }
+    } else {
+        let bytes = unsafe {
+            core::slice::from_raw_parts(&time as *const TimeVal as *const u8, size_of_timeval)
+        };
+        let f_page = PAGE_SIZE - offset;
+        for i in 0..f_page {
+            unsafe { *((ppa + i) as *mut u8) = bytes[i] }
+        }
+        let vpn2 = VirtPageNum(vpn.0 + 1);
+        let pte2 = page_table.translate(vpn2).unwrap();
+        let ppn2 = pte2.ppn();
+        let pa2 = ppn2.0 << 12;
+        for i in 0..(bytes.len() - f_page) {
+            unsafe { *((pa2 + i) as *mut u8) = bytes[f_page + i] }
+        }
+    }
+
+    0
+}
+///实现分配
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
+    task_mmap(start, len, port)
+
 }
 
-/// YOUR JOB: Implement mmap.
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    task_munmap(start, len)
 }
+//trace 不在维护
+pub fn _sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
+    unsafe {
+        let cur_token=current_user_token();
+        let page_table=PageTable::from_token(cur_token);
+        //获取实际地址
+        let va=VirtAddr::from(_id);
+        let page_num=va.floor();
+        let offset=va.page_offset();
+         if let Some(pte)=page_table.translate(page_num){
+         let ppn=pte.ppn();
+         //ppa是实际地址
+         let ppa: usize=(ppn.0<<12)+offset;
+            match _trace_request {
+            //这里需要把用户的虚拟地址改为物理地址
+            0 =>{
+                if pte.is_valid()&&pte.readable()&&pte.is_user(){
+                    *(ppa as *const u8) as isize
+                }else{
+                    -1
+                }
 
-/// YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+            },
+            1 => {
+                if pte.is_valid()&&pte.writable()&&pte.is_user(){
+                    {*(ppa as *mut u8) = _data as u8};
+                    0
+                }else{
+                    -1
+                }   
+            }
+            2 => {
+                get_task_trace(_id)
+            },
+            _ => -1,
+        }
+    }else{
+        -1
+    }
 }
-
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {
     trace!("kernel:pid[{}] sys_sbrk", current_task().unwrap().pid.0);
@@ -159,3 +221,4 @@ pub fn sys_set_priority(_prio: isize) -> isize {
     );
     -1
 }
+

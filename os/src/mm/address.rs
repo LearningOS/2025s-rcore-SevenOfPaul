@@ -271,3 +271,7 @@ where
 }
 /// a simple range structure for virtual page number
 pub type VPNRange = SimpleRange<VirtPageNum>;
+    /// 获取页的起始地址
+    pub fn page_start(&self) -> usize {
+        self.0<<12
+    }

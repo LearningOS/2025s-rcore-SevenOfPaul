@@ -34,6 +34,7 @@ lazy_static! {
 pub struct MemorySet {
     page_table: PageTable,
     areas: Vec<MapArea>,
+    mmap_tree: BTreeMap<VirtPageNum, FrameTracker>,
 }
 
 impl MemorySet {
@@ -42,6 +43,7 @@ impl MemorySet {
         Self {
             page_table: PageTable::new(),
             areas: Vec::new(),
+            mmap_tree: BTreeMap::new()
         }
     }
     /// Get the page table token
@@ -447,3 +449,44 @@ pub fn remap_test() {
         .executable(),);
     println!("remap_test passed!");
 }
+
+///分配
+pub fn mmap(&mut self,mut va_start: VirtPageNum, va_end:VirtPageNum, flags: PTEFlags) -> isize {
+    //比对虚拟页
+     while va_start != va_end {
+         if let Some(pte) = self.page_table.translate(va_start) {
+             if pte.is_valid()&&pte.is_user() {
+                 return -1;
+             }
+         }
+         //分配物理页帧
+         if let Some(ppn) = frame_alloc() {
+             //给va_start分配ppn 并设置映射权限
+             self.page_table.map(va_start, ppn.ppn, flags);
+             // 插入到map_tree中
+             self.mmap_tree.insert(va_start, ppn);
+         } else {
+             return -1;
+         }
+         va_start.step();
+     }
+     0
+ }
+   ///解除分配
+ pub fn unmmap(&mut self, mut va_start: VirtPageNum, va_end:VirtPageNum) -> isize {
+     while va_start != va_end {
+         if let Some(pte) = self.page_table.translate(va_start) {
+             if !pte.is_valid()||!pte.is_user() {
+                 return -1;
+             }
+         } else {
+             return -1;
+         }
+         //取消映射
+         self.page_table.unmap(va_start);
+         //删除表中的映射关系
+         self.mmap_tree.remove(&va_start);
+         va_start.step();
+     }
+     0
+ }

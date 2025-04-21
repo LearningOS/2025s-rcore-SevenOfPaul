@@ -13,6 +13,8 @@
 //!
 //! Be careful when you see `__switch` ASM function in `switch.S`. Control flow around this function
 //! might not be what you expect.
+use crate::mm::VirtAddr;
+use crate::mm::PTEFlags;
 mod context;
 mod id;
 mod manager;
@@ -115,3 +117,22 @@ lazy_static! {
 pub fn add_initproc() {
     add_task(INITPROC.clone());
 }
+fn push_task_trace(&self,id:isize){
+    let mut inner = self.inner.exclusive_access();
+    let current = inner.current_task;
+    if let Some(v)=inner.map[current].iter_mut().find(|k|k.0==id){
+      v.1+=1;
+    }else{
+        inner.map[current].push((id,1));
+    }   
+   }
+   fn get_task_trace(&self,id:isize)->isize{
+    let inner = self.inner.exclusive_access();
+    let current = inner.current_task;
+    let trace=inner.map[current].clone();
+    if let Some(v)=trace.into_iter().find(|k|k.0==id){
+        v.1
+    }else{
+       0
+    }
+   }
