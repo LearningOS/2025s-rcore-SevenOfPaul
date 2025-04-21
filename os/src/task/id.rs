@@ -8,7 +8,7 @@ use crate::mm::{MapPermission, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use alloc::vec::Vec;
 use lazy_static::*;
-
+//保存进程的调度
 pub struct RecycleAllocator {
     current: usize,
     recycled: Vec<usize>,
@@ -21,6 +21,7 @@ impl RecycleAllocator {
             recycled: Vec::new(),
         }
     }
+    //插眼 这里优先试用回收的pid
     pub fn alloc(&mut self) -> usize {
         if let Some(id) = self.recycled.pop() {
             id
@@ -29,6 +30,7 @@ impl RecycleAllocator {
             self.current - 1
         }
     }
+    //这里把销毁的pid放到了recycled中
     pub fn dealloc(&mut self, id: usize) {
         assert!(id < self.current);
         assert!(

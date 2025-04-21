@@ -18,6 +18,7 @@ pub struct Processor {
     current: Option<Arc<TaskControlBlock>>,
 
     ///The basic control flow of each core, helping to select and switch process
+    //维护内核自己的调度栈
     idle_task_cx: TaskContext,
 }
 

@@ -55,9 +55,11 @@ pub struct TaskControlBlockInner {
 
     /// Parent process of the current process.
     /// Weak will not affect the reference count of the parent
+    // 指向当前进程的父进程（如果存在的话）
     pub parent: Option<Weak<TaskControlBlock>>,
 
     /// A vector containing TCBs of all child processes of the current process
+    // 子进程
     pub children: Vec<Arc<TaskControlBlock>>,
 
     /// It is set when active exit or execution error occurs
@@ -92,6 +94,7 @@ impl TaskControlBlock {
     ///
     /// At present, it is only used for the creation of initproc
     pub fn new(elf_data: &[u8]) -> Self {
+        //插眼 这个可能需要啃一下
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
         let trap_cx_ppn = memory_set
