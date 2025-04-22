@@ -13,8 +13,6 @@
 //!
 //! Be careful when you see `__switch` ASM function in `switch.S`. Control flow around this function
 //! might not be what you expect.
-use crate::mm::VirtAddr;
-use crate::mm::PTEFlags;
 mod context;
 mod id;
 mod manager;
@@ -22,7 +20,9 @@ mod processor;
 mod switch;
 #[allow(clippy::module_inception)]
 mod task;
-
+use crate::mm::{
+     PTEFlags, VirtAddr,
+};
 use crate::loader::get_app_data_by_name;
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -117,22 +117,54 @@ lazy_static! {
 pub fn add_initproc() {
     add_task(INITPROC.clone());
 }
-fn push_task_trace(&self,id:isize){
-    let mut inner = self.inner.exclusive_access();
-    let current = inner.current_task;
-    if let Some(v)=inner.map[current].iter_mut().find(|k|k.0==id){
-      v.1+=1;
-    }else{
-        inner.map[current].push((id,1));
-    }   
-   }
-   fn get_task_trace(&self,id:isize)->isize{
-    let inner = self.inner.exclusive_access();
-    let current = inner.current_task;
-    let trace=inner.map[current].clone();
-    if let Some(v)=trace.into_iter().find(|k|k.0==id){
-        v.1
-    }else{
-       0
+
+/// 在适当位置添加这个函数 mmap 分配
+pub fn task_mmap(start: usize, len: usize, port: usize) -> isize{
+    if len == 0 {
+        return 0;
     }
-   }
+    //把start 转成虚拟地址
+    let va_start: VirtAddr =VirtAddr::from(start);
+    if(!va_start.aligned())||(port & !0x7 != 0) || (port & 0x7 == 0) {
+        return -1;
+    }
+    //结尾的虚拟地址
+    let va_end: VirtAddr = VirtAddr::from(start + len);
+    let (readable,wraiteable,excuteable)=(port & 0x1,port & 0x2,port & 0x4);
+            let mut flags = PTEFlags::V | PTEFlags::U;
+            if readable!=0{
+                flags |= PTEFlags::R;
+            }
+          if wraiteable !=0{
+                flags |= PTEFlags::W;
+            }
+          if excuteable!=0{
+                flags |= PTEFlags::X;
+          }
+          //todo
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+
+    // 获取当前任务的内存集
+    let  memory_set =  &mut inner.tasks[current].memory_set;
+
+    // 调用内存集的 mmap 方法
+    //虚拟地址转页号
+    memory_set.mmap(va_start.floor(), va_end.ceil(), flags)
+}
+///mmap 解散
+pub  fn task_munmap(start: usize, len: usize) -> isize {
+    let va_start: VirtAddr = VirtAddr::from(start);
+    if !va_start.aligned(){
+        return -1
+    }
+    // 获取当前任务的内存集
+    //todo
+    let mut inner = TASK_MANAGER.inner.exclusive_access();
+    let current = inner.current_task;
+    let  memory_set =  &mut inner.tasks[current].memory_set;
+
+    // 调用内存集的 unmmap 方法
+    let va_end: VirtAddr = VirtAddr::from(start + len);
+    memory_set.unmmap(va_start.floor(),va_end.ceil())
+}

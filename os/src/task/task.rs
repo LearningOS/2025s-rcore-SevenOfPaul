@@ -2,7 +2,7 @@
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::TRAP_CONTEXT_BASE;
-use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,PTEFlags};
+use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
@@ -43,7 +43,7 @@ pub struct TaskControlBlockInner {
     /// Application data can only appear in areas
     /// where the application address space is lower than base_size
     pub base_size: usize,
-    pub map: Vec<Vec<(isize,isize)>>,
+    // pub map: Vec<Vec<(isize,isize)>>,
     /// Save task context
     pub task_cx: TaskContext,
 
@@ -90,6 +90,26 @@ impl TaskControlBlockInner {
 }
 
 impl TaskControlBlock {
+    // pub fn push_task_trace(&self,id:isize){
+    //     let mut inner = self.inner.exclusive_access();
+    //     let current = inner.current_task;
+    //     if let Some(v)=inner.map[current].iter_mut().find(|k|k.0==id){
+    //       v.1+=1;
+    //     }else{
+    //         inner.map[current].push((id,1));
+    //     }   
+    //    }
+    //    fn get_task_trace(&self,id:isize)->isize{
+
+    //     let inner = self.inner.exclusive_access();
+    //     let current = inner.current_task;
+    //     let trace=inner.map[current].clone();
+    //     if let Some(v)=trace.into_iter().find(|k|k.0==id){
+    //         v.1
+    //     }else{
+    //        0
+    //     }
+    //    }
     /// Create a new process
     ///
     /// At present, it is only used for the creation of initproc
@@ -106,7 +126,7 @@ impl TaskControlBlock {
         let kernel_stack = kstack_alloc();
         let kernel_stack_top = kernel_stack.get_top();
         // push a task context which goes to trap_return to the top of kernel stack
-        let mut map=Vec::new();
+        // let mut map=Vec::new();
         let task_control_block = Self {
             pid: pid_handle,
             kernel_stack,
@@ -122,7 +142,7 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
-                    map,
+                    // map,
                 })
             },
         };
@@ -255,14 +275,14 @@ pub enum TaskStatus {
     /// exited
     Zombie,
 }
-/// 获取id在当前task的计数
-pub fn get_task_trace(id:usize)->isize{
-    TASK_MANAGER.get_task_trace(id.try_into().unwrap()) 
-}
-/// 添加id在当前task的计数
-pub fn push_task_trace(id:usize){
-    TASK_MANAGER.push_task_trace(id.try_into().unwrap())
-}
+// 获取id在当前task的计数
+// pub fn get_task_trace(id:usize)->isize{
+//     TASK_MANAGER.get_task_trace(id.try_into().unwrap()) 
+// }
+// /// 添加id在当前task的计数
+// pub fn push_task_trace(id:usize){
+//     TASK_MANAGER.push_task_trace(id.try_into().unwrap())
+// }
 // fn push_task_trace(&self,id:isize){
 //     let mut inner = self.inner.exclusive_access();
 //     let current = inner.current_task;
@@ -282,51 +302,4 @@ pub fn push_task_trace(id:usize){
 //        0
 //     }
 //    }
-/// 在适当位置添加这个函数 mmap 分配
-pub fn task_mmap(start: usize, len: usize, port: usize) -> isize{
-    if len == 0 {
-        return 0;
-    }
-    //把start 转成虚拟地址
-    let va_start: VirtAddr =VirtAddr::from(start);
-    if(!va_start.aligned())||(port & !0x7 != 0) || (port & 0x7 == 0) {
-        return -1;
-    }
-    //结尾的虚拟地址
-    let va_end: VirtAddr = VirtAddr::from(start + len);
-    let (readable,wraiteable,excuteable)=(port & 0x1,port & 0x2,port & 0x4);
-            let mut flags = PTEFlags::V | PTEFlags::U;
-            if readable!=0{
-                flags |= PTEFlags::R;
-            }
-          if wraiteable !=0{
-                flags |= PTEFlags::W;
-            }
-          if excuteable!=0{
-                flags |= PTEFlags::X;
-          }
-    let mut inner = TASK_MANAGER.inner.exclusive_access();
-    let current = inner.current_task;
 
-    // 获取当前任务的内存集
-    let  memory_set =  &mut inner.tasks[current].memory_set;
-
-    // 调用内存集的 mmap 方法
-    //虚拟地址转页号
-    memory_set.mmap(va_start.floor(), va_end.ceil(), flags)
-}
-///mmap 解散
-pub fn task_munmap(start: usize, len: usize) -> isize {
-    let va_start: VirtAddr = VirtAddr::from(start);
-    if !va_start.aligned(){
-        return -1
-    }
-    // 获取当前任务的内存集
-    let mut inner = TASK_MANAGER.inner.exclusive_access();
-    let current = inner.current_task;
-    let  memory_set =  &mut inner.tasks[current].memory_set;
-
-    // 调用内存集的 unmmap 方法
-    let va_end: VirtAddr = VirtAddr::from(start + len);
-    memory_set.unmmap(va_start.floor(),va_end.ceil())
-}

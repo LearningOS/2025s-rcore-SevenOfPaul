@@ -130,6 +130,10 @@ impl PhysAddr {
     pub fn floor(&self) -> PhysPageNum {
         PhysPageNum(self.0 / PAGE_SIZE)
     }
+        /// 获取页的起始地址
+        pub fn page_start(&self) -> usize {
+            self.0<<12
+        }
     /// Get the (ceil) physical page number
     pub fn ceil(&self) -> PhysPageNum {
         PhysPageNum((self.0 - 1 + PAGE_SIZE) / PAGE_SIZE)
@@ -271,7 +275,4 @@ where
 }
 /// a simple range structure for virtual page number
 pub type VPNRange = SimpleRange<VirtPageNum>;
-    /// 获取页的起始地址
-    pub fn page_start(&self) -> usize {
-        self.0<<12
-    }
+

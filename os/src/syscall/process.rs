@@ -1,14 +1,11 @@
 //! Process management syscalls
 use alloc::sync::Arc;
+use riscv::paging::PageTable;
 
 use crate::{
-    config::PAGE_SIZE,
-    mm::{PageTable, VirtAddr, VirtPageNum},
-    task::{task_mmap,task_munmap,
-        change_program_brk, current_user_token, exit_current_and_run_next, get_task_trace,
-        suspend_current_and_run_next,
-    },
-    timer::get_time_us,
+    config::PAGE_SIZE, loader::get_app_data_by_name, mm::{translated_refmut, translated_str, VirtAddr, VirtPageNum}, 
+    task::{add_task, current_task, current_user_token, exit_current_and_run_next, suspend_current_and_run_next,task_munmap,task_mmap
+    }, timer::get_time_us
 };
 #[repr(C)]
 #[derive(Debug)]
@@ -112,6 +109,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
         usec: us % 1_000_000,
     };
     //这里也一样
+    //todo
     let page_table = PageTable::from_token(current_user_token());
 
     // 获取虚拟地址
@@ -131,7 +129,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
         };
         let f_page = PAGE_SIZE - offset;
         for i in 0..f_page {
-            unsafe { *((ppa + i) as *mut u8) = bytes[i] }
+            unsafe { *((ppa + i)) = bytes[i] }
         }
         let vpn2 = VirtPageNum(vpn.0 + 1);
         let pte2 = page_table.translate(vpn2).unwrap();
@@ -154,45 +152,46 @@ pub fn sys_munmap(start: usize, len: usize) -> isize {
     task_munmap(start, len)
 }
 //trace 不在维护
-pub fn _sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
-    unsafe {
-        let cur_token=current_user_token();
-        let page_table=PageTable::from_token(cur_token);
-        //获取实际地址
-        let va=VirtAddr::from(_id);
-        let page_num=va.floor();
-        let offset=va.page_offset();
-         if let Some(pte)=page_table.translate(page_num){
-         let ppn=pte.ppn();
-         //ppa是实际地址
-         let ppa: usize=(ppn.0<<12)+offset;
-            match _trace_request {
-            //这里需要把用户的虚拟地址改为物理地址
-            0 =>{
-                if pte.is_valid()&&pte.readable()&&pte.is_user(){
-                    *(ppa as *const u8) as isize
-                }else{
-                    -1
-                }
+// pub fn _sys_trace(_trace_request: usize, _id: usize, _data: usize) -> isize {
+//     unsafe {
+//         let cur_token=current_user_token();
+//         let page_table=PageTable::from_token(cur_token);
+//         //获取实际地址
+//         let va=VirtAddr::from(_id);
+//         let page_num=va.floor();
+//         let offset=va.page_offset();
+//          if let Some(pte)=page_table.translate(page_num){
+//          let ppn=pte.ppn();
+//          //ppa是实际地址
+//          let ppa: usize=(ppn.0<<12)+offset;
+//             match _trace_request {
+//             //这里需要把用户的虚拟地址改为物理地址
+//             0 =>{
+//                 if pte.is_valid()&&pte.readable()&&pte.is_user(){
+//                     *(ppa as *const u8) as isize
+//                 }else{
+//                     -1
+//                 }
 
-            },
-            1 => {
-                if pte.is_valid()&&pte.writable()&&pte.is_user(){
-                    {*(ppa as *mut u8) = _data as u8};
-                    0
-                }else{
-                    -1
-                }   
-            }
-            2 => {
-                get_task_trace(_id)
-            },
-            _ => -1,
-        }
-    }else{
-        -1
-    }
-}
+//             },
+//             1 => {
+//                 if pte.is_valid()&&pte.writable()&&pte.is_user(){
+//                     {*(ppa as *mut u8) = _data as u8};
+//                     0
+//                 }else{
+//                     -1
+//                 }   
+//             }
+//             2 => {
+//                 get_task_trace(_id)
+//             },
+//             _ => -1,
+//         }
+//     }else{
+//         -1
+//     }
+// }
+// }
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {
     trace!("kernel:pid[{}] sys_sbrk", current_task().unwrap().pid.0);
