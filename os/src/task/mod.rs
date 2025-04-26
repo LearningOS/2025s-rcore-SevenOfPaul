@@ -28,7 +28,7 @@ use alloc::sync::Arc;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
 use switch::__switch;
-pub use task::{TaskControlBlock, TaskStatus};
+pub use task::{TaskControlBlock, TaskStatus,TaskControlBlockInner};
 
 pub use context::TaskContext;
 pub use id::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
@@ -142,11 +142,10 @@ pub fn task_mmap(start: usize, len: usize, port: usize) -> isize{
                 flags |= PTEFlags::X;
           }
           //todo
-    let mut inner = TASK_MANAGER.inner.exclusive_access();
-    let current = inner.current_task;
-
+          let task = take_current_task().unwrap();
+       let mut inner = task.inner.exclusive_access();
     // 获取当前任务的内存集
-    let  memory_set =  &mut inner.tasks[current].memory_set;
+    let  memory_set =  &mut inner.memory_set;
 
     // 调用内存集的 mmap 方法
     //虚拟地址转页号
@@ -160,9 +159,10 @@ pub  fn task_munmap(start: usize, len: usize) -> isize {
     }
     // 获取当前任务的内存集
     //todo
-    let mut inner = TASK_MANAGER.inner.exclusive_access();
-    let current = inner.current_task;
-    let  memory_set =  &mut inner.tasks[current].memory_set;
+    let task = take_current_task().unwrap();
+       let mut inner = task.inner.exclusive_access();
+    // 获取当前任务的内存集
+    let  memory_set =  &mut inner.memory_set;
 
     // 调用内存集的 unmmap 方法
     let va_end: VirtAddr = VirtAddr::from(start + len);

@@ -5,17 +5,27 @@ use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
 
+// Page table entry flags
+// ppn存储在位10-53中，flags存储在位0-7中
+
 bitflags! {
-    /// page table entry flags
-    /// ppn存储在 10-53 flg存储在0-7
+    /// Flags for page table entries
     pub struct PTEFlags: u8 {
+        /// Valid flag
         const V = 1 << 0;
+        /// Readable flag
         const R = 1 << 1;
+        /// Writable flag
         const W = 1 << 2;
+        /// Executable flag
         const X = 1 << 3;
+        /// User mode access flag
         const U = 1 << 4;
+        /// Global mapping flag
         const G = 1 << 5;
+        /// Accessed flag
         const A = 1 << 6;
+        /// Dirty flag
         const D = 1 << 7;
     }
 }
@@ -63,6 +73,7 @@ impl PageTableEntry {
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
     }
+    ///is cureentUser
     pub fn is_user(&self) -> bool {
         (self.flags() & PTEFlags::U) != PTEFlags::empty()
     }
@@ -210,7 +221,7 @@ pub fn translated_str(token: usize, ptr: *const u8) -> String {
 pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     //trace!("into translated_refmut!");
     let page_table = PageTable::from_token(token);
-    let va = ptr as usize;
+    let va = ptr as *const T as usize;
     //trace!("translated_refmut: before translate_va");
     page_table
         .translate_va(VirtAddr::from(va))

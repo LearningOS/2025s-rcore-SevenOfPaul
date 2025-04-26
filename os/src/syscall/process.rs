@@ -1,10 +1,9 @@
 //! Process management syscalls
 use alloc::sync::Arc;
-use riscv::paging::PageTable;
-
-use crate::{
-    config::PAGE_SIZE, loader::get_app_data_by_name, mm::{translated_refmut, translated_str, VirtAddr, VirtPageNum}, 
-    task::{add_task, current_task, current_user_token, exit_current_and_run_next, suspend_current_and_run_next,task_munmap,task_mmap
+use crate::{loader::get_app_data_by_name,
+     mm::{translated_refmut, translated_str}, 
+     task::{add_task, current_task, current_user_token, exit_current_and_run_next, suspend_current_and_run_next, task_mmap, 
+        task_munmap,
     }, timer::get_time_us
 };
 #[repr(C)]
@@ -108,38 +107,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
         sec: us / 1_000_000,
         usec: us % 1_000_000,
     };
-    //这里也一样
-    //todo
-    let page_table = PageTable::from_token(current_user_token());
-
-    // 获取虚拟地址
-    let va = VirtAddr::from(ts as usize);
-    let vpn = va.floor();
-    let offset = va.page_offset();
-    let pte = page_table.translate(vpn).unwrap();
-    let size_of_timeval = core::mem::size_of::<TimeVal>();
-    let ppn = pte.ppn();
-    let ppa = (ppn.0 << 12) + offset;
-    //如果size_of_timeval大于4096，那么就需要两个页来存储
-    if offset + size_of_timeval <= PAGE_SIZE {
-        unsafe { *(ppa as *mut TimeVal) = time }
-    } else {
-        let bytes = unsafe {
-            core::slice::from_raw_parts(&time as *const TimeVal as *const u8, size_of_timeval)
-        };
-        let f_page = PAGE_SIZE - offset;
-        for i in 0..f_page {
-            unsafe { *((ppa + i)) = bytes[i] }
-        }
-        let vpn2 = VirtPageNum(vpn.0 + 1);
-        let pte2 = page_table.translate(vpn2).unwrap();
-        let ppn2 = pte2.ppn();
-        let pa2 = ppn2.0 << 12;
-        for i in 0..(bytes.len() - f_page) {
-            unsafe { *((pa2 + i) as *mut u8) = bytes[f_page + i] }
-        }
-    }
-
+    *translated_refmut(current_user_token(), ts) = time;
     0
 }
 ///实现分配
@@ -204,14 +172,24 @@ pub fn sys_sbrk(size: i32) -> isize {
 
 /// YOUR JOB: Implement spawn.
 /// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
+
+pub fn sys_spawn(path: *const u8) -> isize {
     trace!(
         "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
-}
-
+    let token=current_user_token();
+    let path=translated_str(token, path);
+    if let Some(data)=get_app_data_by_name(path.as_str()){
+        let task=current_task().unwrap().spawn(data);
+        let pid=task.getpid();
+        add_task(task);
+        pid as isize
+    }
+    else {
+        -1
+    }
+} 
 // YOUR JOB: Set task priority.
 pub fn sys_set_priority(_prio: isize) -> isize {
     trace!(
