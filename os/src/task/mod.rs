@@ -142,7 +142,7 @@ pub fn task_mmap(start: usize, len: usize, port: usize) -> isize{
                 flags |= PTEFlags::X;
           }
           //todo
-          let task = take_current_task().unwrap();
+          let task = current_task().unwrap();
        let mut inner = task.inner.exclusive_access();
     // 获取当前任务的内存集
     let  memory_set =  &mut inner.memory_set;
@@ -159,7 +159,7 @@ pub  fn task_munmap(start: usize, len: usize) -> isize {
     }
     // 获取当前任务的内存集
     //todo
-    let task = take_current_task().unwrap();
+    let task = current_task().unwrap();
        let mut inner = task.inner.exclusive_access();
     // 获取当前任务的内存集
     let  memory_set =  &mut inner.memory_set;

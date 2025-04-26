@@ -12,6 +12,7 @@ use core::cell::RefMut;
 /// Task control block structure
 ///
 /// Directly save the contents that will not change during running
+
 pub struct TaskControlBlock {
     // Immutable
     /// Process identifier
@@ -70,6 +71,10 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+    ///设置优先级
+    pub priority:usize,
+      ///设置优先级 之比
+    pub stride:usize
 }
 
 impl TaskControlBlockInner {
@@ -91,46 +96,56 @@ impl TaskControlBlockInner {
 }
 
 impl TaskControlBlock {
-    ///swpan a process
-    pub fn spawn(self:&Arc<TaskControlBlock>,elf_data: &[u8])->Arc<TaskControlBlock>{
-        let mut parent_inner=self.inner_exclusive_access();// 来自fork
-        let (memory_set,user_sp,entry_point)=MemorySet::from_elf(elf_data); //来自exec
-        let trap_cx_ppn=memory_set.translate(VirtAddr::from(TRAP_CONTEXT_BASE).into()).unwrap().ppn();//来自exec
-        let pid_handle=pid_alloc();//来自fork
-        let kernel_stack=kstack_alloc();//分配新的内核栈
-        let kernel_stack_top=kernel_stack.get_top();
-        let task_control_block=Arc::new(Self{
-            pid:pid_handle,
-            kernel_stack,
-            inner:unsafe{
-                UPSafeCell::new(TaskControlBlockInner { 
-                    trap_cx_ppn, 
-                    base_size: user_sp, 
-                    task_cx: TaskContext::goto_trap_return(kernel_stack_top), 
-                    task_status: TaskStatus::Ready, 
-                    memory_set, 
-                    parent: Some(Arc::downgrade(self)), 
-                    children: Vec::new(), 
-                    exit_code: 0, 
-                    heap_bottom: user_sp, 
-                    program_brk: user_sp, 
-                    // stride:0,
-                    // priority:16,
-                })
-            },
-        });
-        parent_inner.children.push(task_control_block.clone());
-        let trap_cx=task_control_block.inner_exclusive_access().get_trap_cx();
-        *trap_cx=TrapContext::app_init_context(
-          entry_point, 
-          user_sp, 
-          KERNEL_SPACE.exclusive_access().token(),
-          kernel_stack_top, 
-          trap_handler as usize
-        );
-    
-        task_control_block
+    ///设置优先级
+    pub fn set_priority(&self, prio: isize)->isize{
+        let mut inner = self.inner_exclusive_access();
+        inner.priority = prio as usize;
+        inner.priority as isize
     }
+    ///swpan a process
+    pub fn build_task(self:&Arc<TaskControlBlock>,elf_data: &[u8])->Arc<TaskControlBlock>{
+        let  mut parent_inner=self.inner_exclusive_access();
+       //根据elf数据生成信息
+        let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let trap_cx_ppn = memory_set
+        .translate(VirtAddr::from(TRAP_CONTEXT_BASE).into())
+        .unwrap()
+        .ppn();
+    let pid_handle = pid_alloc();
+    let kernel_stack = kstack_alloc();
+    let kernel_stack_top = kernel_stack.get_top();
+    //生成tcb
+    let tcb = Arc::new(TaskControlBlock {
+        pid: pid_handle,
+        kernel_stack,
+        inner: unsafe {
+            UPSafeCell::new(TaskControlBlockInner {
+                trap_cx_ppn,
+                base_size: parent_inner.base_size,
+                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_status: TaskStatus::Ready,
+                memory_set,
+                parent: Some(Arc::downgrade(self)),
+                children: Vec::new(),
+                exit_code: 0,
+                heap_bottom: parent_inner.heap_bottom,
+                program_brk: parent_inner.program_brk,
+                stride:0,
+                priority:16,
+            })
+        },
+    });
+    parent_inner.children.push(tcb.clone());
+    let trap_cx = tcb.inner.exclusive_access().get_trap_cx();
+    *trap_cx = TrapContext::app_init_context(
+        entry_point,
+        user_sp,
+        KERNEL_SPACE.exclusive_access().token(),
+        self.kernel_stack.get_top(),
+        trap_handler as usize,
+    );
+    tcb
+}
     // pub fn push_task_trace(&self,id:isize){
     //     let mut inner = self.inner.exclusive_access();
     //     let current = inner.current_task;
@@ -183,7 +198,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
-                    // map,
+                    stride:0,
+                    priority:16,
                 })
             },
         };
@@ -257,6 +273,8 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    stride:0,
+                    priority:16,
                 })
             },
         });
