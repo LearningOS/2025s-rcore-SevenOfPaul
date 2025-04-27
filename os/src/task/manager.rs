@@ -23,24 +23,24 @@ impl TaskManager {
     pub fn add(&mut self, task: Arc<TaskControlBlock>) {
         self.ready_queue.push_back(task);
     }
-    /// Take a process out of the ready queue 调度算法
+    /// Take a process out of the ready queue 调度算法 我觉得可以改成堆 下班回家试一试
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
-        let mut min_index=0;
-        let mut min_stride=0x7FFF_FFFF;
+        let mut min_idx=0;
+        let mut min_stride=i32::MAX;
         for (idx,task) in self.ready_queue.iter().enumerate(){
             let inner=task.inner_exclusive_access();
             if inner.task_status==TaskStatus::Ready{
                 if inner.stride<min_stride{
                     min_stride=inner.stride;
-                    min_index=idx;
+                    min_idx=idx;
                 }
             }
         }
-        if let Some(task)=self.ready_queue.get(min_index){
+        if let Some(task)=self.ready_queue.get(min_idx){
             let mut inner=task.inner_exclusive_access();
             inner.stride+=BIG_STRIDE/inner.priority;
         }
-        self.ready_queue.remove(min_index)
+        self.ready_queue.remove(min_idx)
     }
 }
 
