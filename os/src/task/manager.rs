@@ -29,11 +29,9 @@ impl TaskManager {
         let mut min_stride=i32::MAX;
         for (idx,task) in self.ready_queue.iter().enumerate(){
             let inner=task.inner_exclusive_access();
-            if inner.task_status==TaskStatus::Ready{
-                if inner.stride<min_stride{
-                    min_stride=inner.stride;
-                    min_idx=idx;
-                }
+            if inner.task_status==TaskStatus::Ready&&inner.stride<min_stride{
+                min_stride=inner.stride;
+                min_idx=idx;
             }
         }
         if let Some(task)=self.ready_queue.get(min_idx){
