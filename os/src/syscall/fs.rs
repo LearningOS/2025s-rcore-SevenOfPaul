@@ -1,8 +1,8 @@
 //! File and filesystem-related syscalls
-use crate::fs::{open_file, OpenFlags, Stat};
+
+use crate::fs::{open_file, OpenFlags, Stat,ROOT_INODE};
 use crate::mm::{translated_byte_buffer, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
-
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     trace!("kernel:pid[{}] sys_write", current_task().unwrap().pid.0);
     let token = current_user_token();
@@ -74,7 +74,14 @@ pub fn sys_close(fd: usize) -> isize {
     inner.fd_table[fd].take();
     0
 }
-
+// //tood 获取文件状态
+// pub struct Stat {
+//     pub dev: u64,
+//     pub ino: u64,
+//     pub mode: StatMode,
+//     pub nlink: u32,
+//     pad: [u64; 7],
+// }
 /// YOUR JOB: Implement fstat.
 pub fn sys_fstat(_fd: usize, _st: *mut Stat) -> isize {
     trace!(
@@ -83,21 +90,39 @@ pub fn sys_fstat(_fd: usize, _st: *mut Stat) -> isize {
     );
     -1
 }
-
+///挂载硬链接
 /// YOUR JOB: Implement linkat.
-pub fn sys_linkat(_old_name: *const u8, _new_name: *const u8) -> isize {
+pub fn sys_linkat(old_name: *const u8, new_name: *const u8) -> isize {
     trace!(
         "kernel:pid[{}] sys_linkat NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    // let task = current_task().unwrap();
+    let token = current_user_token();
+    let old_path = translated_str(token, old_name);
+    let new_path = translated_str(token, new_name);
+    if old_path == new_path {
+        return -1;
+    }
+    if  ROOT_INODE.link(old_path.as_str(), new_path.as_str()).is_some() {
+        return 0;
+    }else{
+        -1
+    }
 }
-
+///删除硬链接
 /// YOUR JOB: Implement unlinkat.
-pub fn sys_unlinkat(_name: *const u8) -> isize {
+pub fn sys_unlinkat(name: *const u8) -> isize {
     trace!(
         "kernel:pid[{}] sys_unlinkat NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let token = current_user_token();
+    let path = translated_str(token, name);
+    if let Some(_) = ROOT_INODE.find(path.as_str()) {
+        ROOT_INODE.unlink(path.as_str())
+    }else{
+        -1
+    }
+
 }

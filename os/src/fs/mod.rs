@@ -4,7 +4,7 @@ mod inode;
 mod stdio;
 
 use crate::mm::UserBuffer;
-
+pub use crate::fs::inode::ROOT_INODE;
 /// trait File for all file types
 pub trait File: Send + Sync {
     /// the file readable?

@@ -8,8 +8,10 @@ use alloc::vec::Vec;
 use spin::{Mutex, MutexGuard};
 /// Virtual filesystem layer over easy-fs
 pub struct Inode {
-    block_id: usize,
-    block_offset: usize,
+    ///block id
+    pub block_id: usize,
+    ///block 偏移
+    pub block_offset: usize,
     fs: Arc<Mutex<EasyFileSystem>>,
     block_device: Arc<dyn BlockDevice>,
 }
@@ -28,6 +30,104 @@ impl Inode {
             fs,
             block_device,
         }
+    }
+    ///绑定一个
+    pub fn link(&self,old_path:&str,new_path:&str)->Option<Arc<Inode>>{
+        //需要修改
+        let mut fs = self.fs.lock();
+        let op = |root_inode: &DiskInode| {
+            // assert it is a directory
+            assert!(root_inode.is_dir());
+           //根patj
+            self.find_inode_id(old_path, root_inode)
+        };
+        // create a new file
+        // alloc a inode with an indirect block
+        let new_inode_id=self.read_disk_inode(op).unwrap();
+        // initialize inode
+        let (new_inode_block_id, new_inode_block_offset) = fs.get_disk_inode_pos(new_inode_id as u32);
+        self.modify_disk_inode(|root_inode| {
+            // append file in the dirent
+            let file_count = (root_inode.size as usize) / DIRENT_SZ;
+            let new_size = (file_count + 1) * DIRENT_SZ;
+            // increase size
+            self.increase_size(new_size as u32, root_inode, &mut fs);
+            // write dirent
+            let dirent = DirEntry::new(new_path, new_inode_id as u32);
+            root_inode.write_at(
+                file_count * DIRENT_SZ,
+                dirent.as_bytes(),
+                &self.block_device,
+            );
+        });
+
+        block_cache_sync_all();
+        Some(Arc::new(Self::new(
+            new_inode_block_id,
+            new_inode_block_offset,
+            self.fs.clone(),
+            self.block_device.clone(),
+        )))
+    }
+    ///统计数量
+    pub fn get_link_num(&self, block_id: usize, block_offset: usize) -> u32 {
+        let fs = self.fs.lock();
+        let mut count = 0;
+        self.read_disk_inode(|root_inode| {
+            let mut buf = DirEntry::empty();
+            let file_count = (root_inode.size as usize) / DIRENT_SZ;
+            for i in 0..file_count {
+                assert_eq!(
+                    root_inode.read_at(DIRENT_SZ * i, buf.as_bytes_mut(), &self.block_device),
+                    DIRENT_SZ,
+                );
+                let (this_inode_block_id, this_inode_block_offset) = fs.get_disk_inode_pos(buf.inode_id());
+                if this_inode_block_id as usize == block_id && this_inode_block_offset == block_offset {
+                    count += 1;
+                }
+            }
+        });
+        count
+    }
+    ///取消链接
+    pub fn unlink(&self,path:&str)->isize{
+        let mut fs = self.fs.lock();
+        let op = |root_inode: &DiskInode| {
+            // assert it is a directory
+            assert!(root_inode.is_dir());
+           //根patj
+            self.find_inode_id(path, root_inode)
+        }; 
+         if let new_inode_id=self.read_disk_inode(op).unwrap(){
+            //修改磁盘数据
+            self.modify_disk_inode(|root_inode| {
+                //查找所有的文件
+               //这里需要一点点改
+                let mut buf = DirEntry::empty();
+                let mut swap = DirEntry::empty();
+                let file_count = (root_inode.size as usize) / DIRENT_SZ;
+                for i in 0..file_count {
+                    if root_inode.read_at(DIRENT_SZ * i, buf.as_bytes_mut(), &self.block_device) == DIRENT_SZ {
+                        if buf.name() == path {
+                            // we are asked not to delete the node so we overwrite the node
+                            root_inode.read_at(DIRENT_SZ *(file_count - 1), swap.as_bytes_mut(), &self.block_device);
+                            root_inode.write_at(DIRENT_SZ * i, swap.as_bytes_mut(), &self.block_device);
+                            root_inode.size -= DIRENT_SZ as u32;
+                            // unlink one per call
+                            break;
+                        }
+                    }
+                }   
+            });
+           //判断什么时候删除数据块
+            //删除数据块
+            let inode=self.find(path).unwrap();
+            inode.clear();
+            block_cache_sync_all();
+           0
+         }else{
+            -1
+         }
     }
     /// Call a function over a disk inode to read it
     fn read_disk_inode<V>(&self, f: impl FnOnce(&DiskInode) -> V) -> V {

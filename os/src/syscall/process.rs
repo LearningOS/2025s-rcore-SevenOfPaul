@@ -6,7 +6,8 @@ use crate::{
     fs::{open_file, OpenFlags},
     mm::{translated_refmut, translated_str},
     task::{
-        add_task, current_task, current_user_token, exit_current_and_run_next,
+        add_task, current_task, current_user_token, exit_current_and_run_next,task_mmap, 
+        task_munmap,
         suspend_current_and_run_next,
     },
 };
@@ -114,21 +115,14 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 }
 
 /// YOUR JOB: Implement mmap.
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
-}
 
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
+    task_mmap(start, len, port)
+
+}
 /// YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!(
-        "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
-        current_task().unwrap().pid.0
-    );
-    -1
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    task_munmap(start, len)
 }
 
 /// change data segment size
@@ -143,19 +137,38 @@ pub fn sys_sbrk(size: i32) -> isize {
 
 /// YOUR JOB: Implement spawn.
 /// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
+/// 这里休要修改
+pub fn sys_spawn(path: *const u8) -> isize {
     trace!(
         "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
-}
+    let token=current_user_token();
+    let path=translated_str(token, path);
+    //这里需要适配应用读取
+    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
+        let data=app_inode.read_all();
+        //build一个task
+        let task=current_task().unwrap().build_task(&data);
+        let pid=task.getpid();
+        add_task(task);
+        pid as isize
+    }
+    else {
+        -1
+    }
+} 
 
 // YOUR JOB: Set task priority.
-pub fn sys_set_priority(_prio: isize) -> isize {
+pub fn sys_set_priority(prio: isize) -> isize {
     trace!(
         "kernel:pid[{}] sys_set_priority NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    if prio<=1{
+        return -1;
+    }
+    else{
+        current_task().unwrap().set_priority(prio)
+    }
 }

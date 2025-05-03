@@ -56,12 +56,12 @@ impl OSInode {
 }
 
 lazy_static! {
+    ///这里是根inode
     pub static ref ROOT_INODE: Arc<Inode> = {
         let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
         Arc::new(EasyFileSystem::root_inode(&efs))
     };
 }
-
 /// List all apps in the root directory
 pub fn list_apps() {
     println!("/**** APPS ****");

@@ -23,7 +23,7 @@ pub struct TaskControlBlock {
     pub kernel_stack: KernelStack,
 
     /// Mutable
-    inner: UPSafeCell<TaskControlBlockInner>,
+    pub inner: UPSafeCell<TaskControlBlockInner>,
 }
 
 impl TaskControlBlock {
@@ -71,6 +71,9 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+    pub priority:usize,
+    ///设置优先级 之比
+    pub stride:usize
 }
 
 impl TaskControlBlockInner {
@@ -97,6 +100,12 @@ impl TaskControlBlockInner {
 }
 
 impl TaskControlBlock {
+    ///设置优先级
+    pub fn set_priority(&self, prio: isize)->isize{
+        let mut inner = self.inner_exclusive_access();
+        inner.priority = prio as usize;
+        inner.priority as isize
+    }
     /// Create a new process
     ///
     /// At present, it is only used for the creation of initproc
@@ -135,6 +144,8 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    priority:16,
+                    stride:0 
                 })
             },
         };
@@ -149,7 +160,59 @@ impl TaskControlBlock {
         );
         task_control_block
     }
-
+    ///继承一个task
+    pub fn build_task(self:&Arc<TaskControlBlock>,elf_data: &[u8])->Arc<TaskControlBlock>{
+        let  mut parent_inner=self.inner_exclusive_access();
+       //根据elf数据生成信息
+        let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let trap_cx_ppn = memory_set
+        .translate(VirtAddr::from(TRAP_CONTEXT_BASE).into())
+        .unwrap()
+        .ppn();
+    let pid_handle = pid_alloc();
+    let kernel_stack = kstack_alloc();
+    let kernel_stack_top = kernel_stack.get_top();
+    //生成tcb
+    let tcb = Arc::new(TaskControlBlock {
+        pid: pid_handle,
+        kernel_stack,
+        inner: unsafe {
+            UPSafeCell::new(TaskControlBlockInner {
+                trap_cx_ppn,
+                base_size: parent_inner.base_size,
+                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_status: TaskStatus::Ready,
+                memory_set,
+                parent: Some(Arc::downgrade(self)),
+                children: Vec::new(),
+                exit_code: 0,
+                heap_bottom: parent_inner.heap_bottom,
+                program_brk: parent_inner.program_brk,
+                stride:0,
+                priority:16,
+                //这里可能需要修改 应该指向父级的fd table
+                fd_table: vec![
+                    // 0 -> stdin
+                    Some(Arc::new(Stdin)),
+                    // 1 -> stdout
+                    Some(Arc::new(Stdout)),
+                    // 2 -> stderr
+                    Some(Arc::new(Stdout)),
+                ],
+            })
+        },
+    });
+    parent_inner.children.push(tcb.clone());
+    let trap_cx = tcb.inner.exclusive_access().get_trap_cx();
+    *trap_cx = TrapContext::app_init_context(
+        entry_point,
+        user_sp,
+        KERNEL_SPACE.exclusive_access().token(),
+        self.kernel_stack.get_top(),
+        trap_handler as usize,
+    );
+    tcb
+}
     /// Load a new elf to replace the original application address space and start execution
     pub fn exec(&self, elf_data: &[u8]) {
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -216,6 +279,8 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    priority:parent_inner.priority,
+                    stride:0
                 })
             },
         });

@@ -22,14 +22,14 @@ mod switch;
 #[allow(rustdoc::private_intra_doc_links)]
 mod task;
 
-use crate::fs::{open_file, OpenFlags};
+use crate::{fs::{open_file, OpenFlags}, mm::{PTEFlags, VirtAddr}};
+// use crate::mm::{PTEFlags};
 use alloc::sync::Arc;
 pub use context::TaskContext;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
-
 pub use id::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 pub use manager::add_task;
 pub use processor::{
@@ -119,4 +119,54 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+}
+/// 分配虚拟页
+pub fn task_mmap(start: usize, len: usize, port: usize) -> isize{
+    if len == 0 {
+        return 0;
+    }
+    //把start 转成虚拟地址
+    let va_start: VirtAddr =VirtAddr::from(start);
+    if(!va_start.aligned())||(port & !0x7 != 0) || (port & 0x7 == 0) {
+        return -1;
+    }
+    //结尾的虚拟地址
+    let va_end: VirtAddr = VirtAddr::from(start + len);
+    let (readable,wraiteable,excuteable)=(port & 0x1,port & 0x2,port & 0x4);
+            let mut flags = PTEFlags::V | PTEFlags::U;
+            if readable!=0{
+                flags |= PTEFlags::R;
+            }
+          if wraiteable !=0{
+                flags |= PTEFlags::W;
+            }
+          if excuteable!=0{
+                flags |= PTEFlags::X;
+          }
+          //todo
+          let task = current_task().unwrap();
+       let mut inner = task.inner.exclusive_access();
+    // 获取当前任务的内存集
+    let  memory_set =  &mut inner.memory_set;
+
+    // 调用内存集的 mmap 方法
+    //虚拟地址转页号
+    memory_set.mmap(va_start.floor(), va_end.ceil(), flags)
+}
+///mmap 解散
+pub  fn task_munmap(start: usize, len: usize) -> isize {
+    let va_start: VirtAddr = VirtAddr::from(start);
+    if !va_start.aligned(){
+        return -1
+    }
+    // 获取当前任务的内存集
+    //todo
+    let task = current_task().unwrap();
+       let mut inner = task.inner.exclusive_access();
+    // 获取当前任务的内存集
+    let  memory_set =  &mut inner.memory_set;
+
+    // 调用内存集的 unmmap 方法
+    let va_end: VirtAddr = VirtAddr::from(start + len);
+    memory_set.unmmap(va_start.floor(),va_end.ceil())
 }

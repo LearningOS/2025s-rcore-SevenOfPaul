@@ -4,17 +4,24 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
-
 bitflags! {
     /// page table entry flags
     pub struct PTEFlags: u8 {
+        /// Valid flag - 有效位
         const V = 1 << 0;
+        /// Readable flag - 可读位
         const R = 1 << 1;
+        /// Writable flag - 可写位
         const W = 1 << 2;
+        /// Executable flag - 可执行位
         const X = 1 << 3;
+        /// User flag - 用户位
         const U = 1 << 4;
+        /// Global flag - 全局位
         const G = 1 << 5;
+        /// Accessed flag - 访问位
         const A = 1 << 6;
+        /// Dirty flag - 脏位
         const D = 1 << 7;
     }
 }
@@ -48,6 +55,10 @@ impl PageTableEntry {
     }
     /// The page pointered by page table entry is valid?
     pub fn is_valid(&self) -> bool {
+        (self.flags() & PTEFlags::U) != PTEFlags::empty()
+    }
+    ///判断是否是用户的
+    pub fn is_user(&self) -> bool {
         (self.flags() & PTEFlags::V) != PTEFlags::empty()
     }
     /// The page pointered by page table entry is readable?
